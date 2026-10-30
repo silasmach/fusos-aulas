@@ -57,6 +57,17 @@ tr.all td,tr.all th{background:var(--all);color:var(--okink);box-shadow:inset 3p
 tr.all th{box-shadow:inset 4px 0 0 var(--allbar)}
 tr.now th::after{content:"agora";margin-left:8px;font-size:.7rem;font-weight:600;color:var(--now);border:1px solid var(--now);border-radius:6px;padding:0 5px}
 .leg{margin:10px 2px 0;color:var(--muted);font-size:.82rem}
+.ag{list-style:none;margin:0;padding:0}
+.ag li{display:grid;grid-template-columns:minmax(150px,1fr) minmax(200px,1.4fr) 2fr;gap:4px 16px;align-items:baseline;padding:10px 0;border-top:1px solid var(--line)}
+.ag li:first-child{border-top:0}
+.ag .big{font-size:1.15rem;font-weight:800}
+.ag .w{color:var(--dstink);background:var(--dstbg);padding:1px 8px;border-radius:6px;font-size:.82rem;margin-left:6px}
+.les-row{display:flex;gap:6px;margin-top:4px}
+.les-row select,.les-row input{background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:6px 8px;font:inherit;font-size:.85rem;color:var(--ink);min-width:0}
+.les-row select{flex:1}
+td.les{box-shadow:inset 0 0 0 2px var(--now)}
+td i.tg{color:var(--surface);background:var(--now);border-radius:6px;padding:0 6px;font-weight:600}
+@media (max-width:640px){.ag li{grid-template-columns:1fr}}
 @media (max-width:520px){.clock{font-size:2.2rem}}
 </style>
 </head>
@@ -66,6 +77,11 @@ tr.now th::after{content:"agora";margin-left:8px;font-size:.7rem;font-weight:600
 <p class="sub">Seu horário de referência é São Paulo (Brasília). Fusos e horário de verão são calculados para a data escolhida. Para trocar o nome de um aluno, clique no nome dele no cartão.</p>
 
 <section class="cards" id="cards" aria-label="Horários agora"></section>
+
+<section class="panel">
+<h2>Agenda das aulas (horário de São Paulo)</h2>
+<div id="lesson"></div>
+</section>
 
 <section class="panel">
 <h2>Adicionar aluno ou lugar favorito</h2>
@@ -86,7 +102,7 @@ tr.now th::after{content:"agora";margin-left:8px;font-size:.7rem;font-weight:600
 <label>Janela de aula, de (h)<input type="number" id="from" min="0" max="23"></label>
 <label>até (h)<input type="number" id="to" min="1" max="24"></label>
 </div>
-<p class="leg">A janela vale para o horário local de cada pessoa. Linhas em verde forte servem para todos.</p>
+<p class="leg">A janela vale para o horário local de cada pessoa. Linhas em verde forte servem para todos. Células com borda azul marcam a aula fixa de cada aluno.</p>
 <p class="best" id="best" style="margin-top:12px"></p>
 <div class="tw"><table id="tbl"></table></div>
 </section>
@@ -95,13 +111,14 @@ tr.now th::after{content:"agora";margin-left:8px;font-size:.7rem;font-weight:600
 <script>
 var BASE='America/Sao_Paulo';
 var CITIES=[['Los Angeles (Califórnia, EUA)','America/Los_Angeles'],['San Francisco (Califórnia, EUA)','America/Los_Angeles'],['San Diego (Califórnia, EUA)','America/Los_Angeles'],['Wellington (Nova Zelândia)','Pacific/Auckland'],['Auckland (Nova Zelândia)','Pacific/Auckland'],['Nova York (EUA)','America/New_York'],['Miami (EUA)','America/New_York'],['Chicago (EUA)','America/Chicago'],['Denver (EUA)','America/Denver'],['Honolulu (Havaí)','Pacific/Honolulu'],['Toronto (Canadá)','America/Toronto'],['Cidade do México','America/Mexico_City'],['Buenos Aires (Argentina)','America/Argentina/Buenos_Aires'],['Santiago (Chile)','America/Santiago'],['Lisboa (Portugal)','Europe/Lisbon'],['Londres (Reino Unido)','Europe/London'],['Madri (Espanha)','Europe/Madrid'],['Paris (França)','Europe/Paris'],['Berlim (Alemanha)','Europe/Berlin'],['Roma (Itália)','Europe/Rome'],['Dubai (Emirados Árabes)','Asia/Dubai'],['Mumbai (Índia)','Asia/Kolkata'],['Singapura','Asia/Singapore'],['Xangai (China)','Asia/Shanghai'],['Tóquio (Japão)','Asia/Tokyo'],['Seul (Coreia do Sul)','Asia/Seoul'],['Sydney (Austrália)','Australia/Sydney'],['Johannesburgo (África do Sul)','Africa/Johannesburg']];
-var DEF={favs:[{name:'Aluno',place:'Califórnia, EUA',tz:'America/Los_Angeles'},{name:'Aluna',place:'Wellington, Nova Zelândia',tz:'Pacific/Auckland'}],from:8,to:21};
+var DEF={favs:[{name:'Cain',place:'Califórnia, EUA',tz:'America/Los_Angeles',lesson:{dow:4,time:'09:00'}},{name:'Carla',place:'Wellington, Nova Zelândia',tz:'Pacific/Auckland',lesson:{dow:6,time:'08:00'}}],from:8,to:21};
 var $=function(s){return document.querySelector(s)};
 var pad=function(n){return String(n).padStart(2,'0')};
 var esc=function(s){return String(s).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]})};
 var norm=function(s){return s.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase()};
 
-function load(){try{var r=localStorage.getItem('fusos-aulas');if(r){var o=JSON.parse(r);if(o&&Array.isArray(o.favs))return Object.assign({},DEF,o)}}catch(e){}return JSON.parse(JSON.stringify(DEF))}
+function load(){try{var r=localStorage.getItem('fusos-aulas');if(r){var o=JSON.parse(r);if(o&&Array.isArray(o.favs))return mig(Object.assign({},DEF,o))}}catch(e){}return JSON.parse(JSON.stringify(DEF))}
+function mig(o){o.favs.forEach(function(f){if(f.lesson)return;if(f.name==='Aluno'&&f.tz==='America/Los_Angeles'){f.name='Cain';f.lesson={dow:4,time:'09:00'}}else if(f.name==='Aluna'&&f.tz==='Pacific/Auckland'){f.name='Carla';f.lesson={dow:6,time:'08:00'}}});return o}
 function save(){try{localStorage.setItem('fusos-aulas',JSON.stringify(S))}catch(e){}}
 var S=load();
 
@@ -130,7 +147,7 @@ function renderCards(){
       '<div class="meta">'+fmtDate(z.tz,now)+' · '+fmtOff(offset(z.tz,now))+'</div>'+
       '<div class="meta">'+(z.base?'Horário de referência':diffText(z.tz,now))+'</div>'+
       '<span class="tag'+(dst?' dst':'')+'">'+(dst?'Horário de verão ativo':'Horário padrão')+'</span>'+
-      '<span class="chg">'+chTxt+'</span>'+
+      '<span class="chg">'+chTxt+'</span>'+(z.base?'':lessonRow(z,i-1))+
       (z.base?'':'<button class="rm" data-i="'+(i-1)+'" aria-label="Remover '+esc(z.name)+'">×</button>')+'</article>';
   }).join('');
 }
@@ -149,17 +166,33 @@ function renderTable(){
     zs.slice(1).forEach(function(z){
       var p=parts(z.tz,t),ok=p.hour>=from&&p.hour<to,dd=Date.UTC(p.year,p.month-1,p.day)/864e5-baseDay;
       if(!ok)all=false;
-      cells+='<td class="'+(ok?'ok':'')+'">'+pad(p.hour)+':'+pad(p.minute)+(dd?'<i>'+(dd>0?'amanhã':'ontem')+'</i>':'')+'</td>';
+      var ls=z.lesson&&z.lesson.dow===new Date(Date.UTC(p.year,p.month-1,p.day)).getUTCDay()&&+z.lesson.time.split(':')[0]===p.hour;
+      cells+='<td class="'+(ok?'ok':'')+(ls?' les':'')+'">'+pad(p.hour)+':'+pad(p.minute)+(dd?'<i>'+(dd>0?'amanhã':'ontem')+'</i>':'')+(ls?'<i class="tg">aula</i>':'')+'</td>';
     });
     if(all)good.push(h);
     var cls=(all?'all ':'')+(isToday&&h===nowH?'now':'');
     rows+='<tr class="'+cls+'"><th scope="row">'+pad(h)+':00</th>'+cells+'</tr>';
   }
   $('#tbl').innerHTML=head+'<tbody>'+rows+'</tbody>';
-  var groups=[];good.forEach(function(h){var g=groups[groups.length-1];if(g&&g[1]===h-1)g[1]=h;else groups.push([h,h])});
+  renderLesson();var groups=[];good.forEach(function(h){var g=groups[groups.length-1];if(g&&g[1]===h-1)g[1]=h;else groups.push([h,h])});
   $('#best').innerHTML=groups.length?'Bom para todos: '+groups.map(function(g){return '<b>'+pad(g[0])+':00 às '+pad(g[1]+1)+':00</b>'}).join('')+' <span class="meta">(horário de São Paulo)</span>':'Nenhum horário em comum nessa janela. Amplie a janela de aula ou escolha outra data.';
 }
 
+var DOW=['domingo','segunda-feira','terça-feira','quarta-feira','quinta-feira','sexta-feira','sábado'];
+function lessonRow(z,i){var L=z.lesson||{};return '<span class="chg">Aula fixa (horário dele)</span><div class="les-row"><select class="dw" data-i="'+i+'" aria-label="Dia da aula"><option value="">Sem aula fixa</option>'+DOW.map(function(n,k){return '<option value="'+k+'"'+(L.dow===k?' selected':'')+'>'+n+'</option>'}).join('')+'</select><input type="time" class="lt" data-i="'+i+'" value="'+(L.time||'')+'" aria-label="Horário da aula"></div>'}
+function nextLessons(z){var L=z.lesson;if(!L||!L.time)return [];var tm=L.time.split(':').map(Number),out=[],now=Date.now(),p0=parts(z.tz,now),base=Date.UTC(p0.year,p0.month-1,p0.day);for(var k=0;k<75&&out.length<10;k++){var dt=new Date(base+k*864e5);if(dt.getUTCDay()!==L.dow)continue;var inst=toInstant(z.tz,dt.getUTCFullYear(),dt.getUTCMonth()+1,dt.getUTCDate(),tm[0],tm[1]);if(inst>=now-36e5)out.push(inst)}return out}
+function renderLesson(){
+  var el=$('#lesson'),rows=[];
+  var key=function(t){var p=parts(BASE,t);return DOW[new Date(Date.UTC(p.year,p.month-1,p.day)).getUTCDay()]+' '+pad(p.hour)+':'+pad(p.minute)};
+  S.favs.forEach(function(z){
+    var oc=nextLessons(z);if(!oc.length)return;
+    var k0=key(oc[0]),warn='';
+    for(var k=1;k<oc.length;k++){if(key(oc[k])!==k0){warn='<span class="w">A partir de '+fmtDate(BASE,oc[k])+' passa para '+key(oc[k])+' em São Paulo (mudança de horário de verão)</span>';break}}
+    rows.push({t:oc[0],html:'<li><div><b>'+esc(z.name||z.place)+'</b><div class="meta">'+DOW[z.lesson.dow]+' '+z.lesson.time+' no horário dele</div></div><div class="big">'+k0+'</div><div class="meta">Próxima: '+fmtDate(BASE,oc[0])+warn+'</div></li>'});
+  });
+  rows.sort(function(a,b){return a.t-b.t});
+  el.innerHTML=rows.length?'<ul class="ag">'+rows.map(function(r){return r.html}).join('')+'</ul>':'<p class="meta">Escolha o dia e o horário da aula no cartão de cada aluno.</p>';
+}
 function render(){renderCards();renderTable()}
 
 function add(){
@@ -180,6 +213,7 @@ function add(){
   $('#add').onclick=add;
   $('#place').addEventListener('keydown',function(e){if(e.key==='Enter')add()});
   $('#nick').addEventListener('keydown',function(e){if(e.key==='Enter')add()});
+  $('#cards').addEventListener('change',function(e){var t=e.target;if(!t.classList||!(t.classList.contains('dw')||t.classList.contains('lt')))return;var f=S.favs[+t.dataset.i];if(!f)return;var row=t.closest('.les-row'),d=row.querySelector('.dw').value,tm=row.querySelector('.lt').value;if(d==='')delete f.lesson;else f.lesson={dow:+d,time:tm||'09:00'};save();renderCards();renderTable()});
   $('#today').onclick=function(){$('#date').value=todayStr();renderTable()};
   $('#date').onchange=renderTable;
   $('#from').onchange=function(){S.from=Math.min(23,Math.max(0,+this.value||0));this.value=S.from;save();renderTable()};
@@ -187,7 +221,7 @@ function add(){
   $('#cards').addEventListener('click',function(e){var b=e.target.closest('.rm');if(b){S.favs.splice(+b.dataset.i,1);save();render()}});
   render();
   $('#cards').addEventListener('input',function(e){var n=e.target.closest('.nm');if(n){S.favs[+n.dataset.i].name=n.value;save();renderTable()}});
-  setInterval(function(){if(!document.activeElement||!document.activeElement.classList.contains('nm'))renderCards()},20000);
+  setInterval(function(){var a=document.activeElement;if(!(a&&a.closest&&a.closest('#cards')&&/INPUT|SELECT/.test(a.tagName)))renderCards()},20000);
 })();
 </script>
 </body>
